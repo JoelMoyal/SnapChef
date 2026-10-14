@@ -17,6 +17,19 @@ A user can register, set meal/cuisine/allergen preferences, capture or enter ing
 
 These are proposed defaults and should be confirmed during Phase 0.
 
+## Ingredient recognition approach
+
+Recognition is the highest technical risk, so the provider is chosen for accuracy, cost, and privacy, and is always called through the backend — never directly from the Flutter client, and never with secrets shipped in the client.
+
+**Recommended default:** a hosted vision model on a free tier (for example Google Gemini Flash). It gives the best ingredient-naming accuracy, costs nothing at MVP and demo volumes, and needs no infrastructure to run.
+
+Alternatives, kept open behind the repository interface:
+
+- **Self-hosted open model** (for example Ollama running Qwen2.5-VL, LLaVA, or Moondream). Free while running on a developer machine; needs an always-on server to serve real users.
+- **On-device labeling** (for example Google ML Kit). Free and offline, but weaker at naming specific ingredients.
+
+The `IngredientRepository` interface lets the app switch between stub, hosted, self-hosted, and on-device implementations by changing one file, with no screen changes. Because smaller models misread food more often, recognition output must never be the sole basis for allergen safety.
+
 ## Team ownership
 
 Owners lead design and integration for their stream. Every major pull request needs a reviewer from another stream.
@@ -158,7 +171,7 @@ Owners lead design and integration for their stream. Every major pull request ne
 
 1. Which platforms must the final demo support?
 2. Is Firebase accepted by the course, or is another backend required?
-3. Which recognition service is permitted, and what are its cost and privacy constraints?
+3. Which recognition service is permitted, and what are its cost and privacy constraints? (Recommended default: a hosted vision model on a free tier such as Gemini Flash — see "Ingredient recognition approach".)
 4. Can guests scan and receive recommendations, or is sign-in required?
 5. On account deletion, are authored public recipes deleted, anonymized, or retained?
 6. Does “private recipe list” mean private recipes, saved recipes, or both?
