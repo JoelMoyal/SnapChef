@@ -38,6 +38,9 @@ dependencies:
   # State management for the whole app (team-wide default).
   flutter_riverpod: ^2.6.1
 
+  # Auth + database backend (team Supabase project).
+  supabase_flutter: ^2.18.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
