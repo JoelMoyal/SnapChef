@@ -33,13 +33,15 @@ class WelcomeScreen extends StatelessWidget {
               ),
               FilledButton(
                 style: _bigButton,
-                onPressed: () => Navigator.of(context).push(SignupScreen.route()),
+                onPressed: () =>
+                    Navigator.of(context).push(SignupScreen.route()),
                 child: const Text('Create account'),
               ),
               const SizedBox(height: 8),
               OutlinedButton(
                 style: _bigButton,
-                onPressed: () => Navigator.of(context).push(LoginScreen.route()),
+                onPressed: () =>
+                    Navigator.of(context).push(LoginScreen.route()),
                 child: const Text('Log in'),
               ),
             ],

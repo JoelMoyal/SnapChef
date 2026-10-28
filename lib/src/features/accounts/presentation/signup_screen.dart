@@ -25,6 +25,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _password = TextEditingController();
   final _emailFocus = FocusNode();
   bool _submitting = false;
+  bool _confirmationSent = false;
   AuthError? _error;
 
   @override
@@ -45,7 +46,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     setState(() => _submitting = true);
     try {
-      await ref
+      final user = await ref
           .read(authRepositoryProvider)
           .signUp(
             firstName: _firstName.text,
@@ -53,7 +54,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             email: _email.text,
             password: _password.text,
           );
-      // Account created → the auth gate swaps to the main app.
+      // Account created → the auth gate swaps to the main app. No user means
+      // the backend sent a confirmation email first.
+      if (user == null && mounted) setState(() => _confirmationSent = true);
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() => _error = e.error);
@@ -73,9 +76,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       message: 'An account with this email already exists.',
       actions: [
         OutlinedButton(
-          onPressed: () => Navigator.of(
-            context,
-          ).pushReplacement(LoginScreen.route(email: _email.text.trim())),
+          onPressed: () => Navigator.of(context)
+              .pushReplacement(LoginScreen.route(email: _email.text.trim())),
           child: const Text('Log in instead'),
         ),
         TextButton(
@@ -84,15 +86,36 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         ),
       ],
     ),
-    AuthError.network || AuthError.invalidCredentials => const AuthErrorBanner(
+    AuthError.network ||
+    AuthError.invalidCredentials ||
+    AuthError.emailNotConfirmed => const AuthErrorBanner(
       message:
           'We couldn’t create your account right now. '
           'Check your connection and try again.',
     ),
   };
 
+  Widget _checkEmail() => AuthFormScaffold(
+    title: 'Check your email',
+    children: [
+      Text(
+        'We sent a confirmation link to ${_email.text.trim()}. '
+        'Open it, then log in.',
+      ),
+      const SizedBox(height: 24),
+      FilledButton(
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+        onPressed: () =>
+            Navigator.of(context)
+                .pushReplacement(LoginScreen.route(email: _email.text.trim())),
+        child: const Text('Go to log in'),
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
+    if (_confirmationSent) return _checkEmail();
     final banner = _banner();
     return AuthFormScaffold(
       title: 'Create your account',

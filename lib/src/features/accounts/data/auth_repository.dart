@@ -8,6 +8,9 @@ enum AuthError {
   /// Login: email and password don't match an account.
   invalidCredentials,
 
+  /// Login: the account exists but its email hasn't been confirmed yet.
+  emailNotConfirmed,
+
   /// Sign up: an account with this email already exists.
   emailInUse,
 
@@ -32,12 +35,15 @@ abstract interface class AuthRepository {
   /// Errors on the first event mean the stored session couldn't be restored.
   Stream<AppUser?> authStateChanges();
 
-  /// Throws [AuthException] with [AuthError.invalidCredentials] or
-  /// [AuthError.network].
+  /// Throws [AuthException] with [AuthError.invalidCredentials],
+  /// [AuthError.emailNotConfirmed] or [AuthError.network].
   Future<AppUser> logIn({required String email, required String password});
 
+  /// Returns the signed-in user, or null when the backend requires email
+  /// confirmation first (a confirmation link has been sent).
+  ///
   /// Throws [AuthException] with [AuthError.emailInUse] or [AuthError.network].
-  Future<AppUser> signUp({
+  Future<AppUser?> signUp({
     required String firstName,
     required String lastName,
     required String email,
@@ -68,7 +74,7 @@ class StubAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
-    await Future<void>.delayed(latency);
+    await _simulateLatency();
     final account = _accounts[_normalize(email)];
     if (account == null || account.password != password) {
       throw const AuthException(AuthError.invalidCredentials);
@@ -77,13 +83,13 @@ class StubAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AppUser> signUp({
+  Future<AppUser?> signUp({
     required String firstName,
     required String lastName,
     required String email,
     required String password,
   }) async {
-    await Future<void>.delayed(latency);
+    await _simulateLatency();
     final key = _normalize(email);
     if (_accounts.containsKey(key)) {
       throw const AuthException(AuthError.emailInUse);
@@ -101,6 +107,12 @@ class StubAuthRepository implements AuthRepository {
   @override
   Future<void> logOut() async {
     _setCurrent(null);
+  }
+
+  // Skipped at zero latency so tests can call the stub directly inside
+  // testWidgets, whose fake clock never advances on its own.
+  Future<void> _simulateLatency() async {
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
   }
 
   String _normalize(String email) => email.trim().toLowerCase();

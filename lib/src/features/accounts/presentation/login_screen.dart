@@ -55,6 +55,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   static String _messageFor(AuthError error) => switch (error) {
     AuthError.invalidCredentials =>
       'That email and password don’t match. Check them and try again.',
+    AuthError.emailNotConfirmed =>
+      'Confirm your email first. We sent you a link when you signed up.',
     AuthError.network =>
       'Something went wrong on our side or with your connection. '
           'Please try again.',
@@ -90,9 +92,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   autofillHints: const [AutofillHints.password],
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _submit(),
-                  validator: (v) => (v == null || v.isEmpty)
-                      ? 'Enter your password'
-                      : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Enter your password' : null,
                 ),
               ],
             ),

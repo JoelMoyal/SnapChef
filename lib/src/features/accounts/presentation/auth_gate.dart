@@ -28,9 +28,8 @@ class AuthGate extends ConsumerWidget {
         .watch(authStateProvider)
         .when(
           data: (user) => user == null ? const WelcomeScreen() : signedIn,
-          loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          ),
+          loading: () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (_, _) => const _RestoreFailed(),
         );
   }

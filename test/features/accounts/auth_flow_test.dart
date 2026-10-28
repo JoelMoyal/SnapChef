@@ -6,11 +6,13 @@ import 'package:snapchef/src/core/models/app_user.dart';
 import 'package:snapchef/src/features/accounts/application/auth_providers.dart';
 import 'package:snapchef/src/features/accounts/data/auth_repository.dart';
 
-/// Stub with no latency, plus a switch to simulate network failures.
+/// Stub with no latency, plus switches to simulate network failures and a
+/// backend that requires email confirmation.
 class _FakeAuthRepository extends StubAuthRepository {
   _FakeAuthRepository() : super(latency: Duration.zero);
 
   bool offline = false;
+  bool requireConfirmation = false;
 
   @override
   Future<AppUser> logIn({required String email, required String password}) {
@@ -19,13 +21,14 @@ class _FakeAuthRepository extends StubAuthRepository {
   }
 
   @override
-  Future<AppUser> signUp({
+  Future<AppUser?> signUp({
     required String firstName,
     required String lastName,
     required String email,
     required String password,
-  }) {
+  }) async {
     if (offline) throw const AuthException(AuthError.network);
+    if (requireConfirmation) return null;
     return super.signUp(
       firstName: firstName,
       lastName: lastName,
@@ -85,9 +88,7 @@ void main() {
     expect(find.text('Create a password'), findsOneWidget);
   });
 
-  testWidgets('account created → main app; log out → welcome', (
-    tester,
-  ) async {
+  testWidgets('account created → main app; log out → welcome', (tester) async {
     await _pumpApp(tester);
     await _tap(tester, find.text('Create account'));
     await _fillSignup(tester);
@@ -158,6 +159,22 @@ void main() {
     await tester.enterText(_field('Password'), 'password123');
     await _tap(tester, submit);
     expect(find.byType(NavigationBar), findsOneWidget);
+  });
+
+  testWidgets('sign up with email confirmation shows check-your-email', (
+    tester,
+  ) async {
+    final repo = await _pumpApp(tester);
+    repo.requireConfirmation = true;
+
+    await _tap(tester, find.text('Create account'));
+    await _fillSignup(tester);
+    await _tap(tester, find.widgetWithText(FilledButton, 'Create account'));
+
+    expect(find.text('Check your email'), findsOneWidget);
+    await _tap(tester, find.text('Go to log in'));
+    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('ana@example.com'), findsOneWidget);
   });
 
   testWidgets('network error shows a retryable message', (tester) async {
