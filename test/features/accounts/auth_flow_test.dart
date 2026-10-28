@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:snapchef/src/app.dart';
 import 'package:snapchef/src/core/models/app_user.dart';
 import 'package:snapchef/src/features/accounts/application/auth_providers.dart';
+import 'package:snapchef/src/features/accounts/application/profile_providers.dart';
 import 'package:snapchef/src/features/accounts/data/auth_repository.dart';
+import 'package:snapchef/src/features/accounts/data/profile_repository.dart';
 
 /// Stub with no latency, plus switches to simulate network failures and a
 /// backend that requires email confirmation.
@@ -42,7 +44,10 @@ Future<_FakeAuthRepository> _pumpApp(WidgetTester tester) async {
   final repo = _FakeAuthRepository();
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [authRepositoryProvider.overrideWithValue(repo)],
+      overrides: [
+        authRepositoryProvider.overrideWithValue(repo),
+        profileRepositoryProvider.overrideWithValue(StubProfileRepository()),
+      ],
       child: const SnapChefApp(),
     ),
   );
@@ -188,5 +193,77 @@ void main() {
 
     expect(find.textContaining('Please try again'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Log in'), findsOneWidget);
+  });
+
+  testWidgets('forgot password: code, new password, then log in with it', (
+    tester,
+  ) async {
+    final repo = await _pumpApp(tester);
+    await repo.signUp(
+      firstName: 'Ana',
+      lastName: 'Lopez',
+      email: 'ana@example.com',
+      password: 'password123',
+    );
+    await repo.logOut();
+    await tester.pumpAndSettle();
+
+    await _tap(tester, find.text('Log in'));
+    await tester.enterText(_field('Email'), 'ana@example.com');
+    await _tap(tester, find.text('Forgot password?'));
+    expect(find.text('Reset your password'), findsOneWidget);
+    await _tap(tester, find.text('Send reset code'));
+
+    await tester.enterText(_field('Code'), '000000');
+    await _tap(tester, find.text('Verify code'));
+    expect(find.textContaining('wrong or has expired'), findsOneWidget);
+
+    await tester.enterText(_field('Code'), StubAuthRepository.resetCode);
+    await _tap(tester, find.text('Verify code'));
+    expect(find.text('Choose a new password'), findsOneWidget);
+
+    await tester.enterText(_field('New password'), 'newpassword1');
+    await tester.enterText(_field('Confirm new password'), 'newpassword1');
+    await _tap(tester, find.text('Save new password'));
+    expect(find.byType(NavigationBar), findsOneWidget);
+
+    await repo.logOut();
+    await tester.pumpAndSettle();
+    await expectLater(
+      repo.logIn(email: 'ana@example.com', password: 'newpassword1'),
+      completes,
+    );
+  });
+
+  testWidgets('food preferences are saved and reloaded', (tester) async {
+    await _pumpApp(tester);
+    await _tap(tester, find.text('Create account'));
+    await _fillSignup(tester);
+    await _tap(tester, find.widgetWithText(FilledButton, 'Create account'));
+
+    await _tap(tester, find.text('Account'));
+    await _tap(tester, find.text('Food preferences'));
+    await _tap(tester, find.widgetWithText(FilterChip, 'Vegan'));
+    await _tap(tester, find.widgetWithText(FilterChip, 'Peanuts'));
+    await _tap(tester, find.text('Save preferences'));
+    expect(find.text('Your preferences have been saved.'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await _tap(tester, find.text('Food preferences'));
+
+    Future<bool> selected(String label) async {
+      final chip = find.widgetWithText(FilterChip, label);
+      await tester.scrollUntilVisible(
+        chip,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      return tester.widget<FilterChip>(chip).selected;
+    }
+
+    expect(await selected('Vegan'), isTrue);
+    expect(await selected('Italian'), isFalse);
+    expect(await selected('Peanuts'), isTrue);
   });
 }

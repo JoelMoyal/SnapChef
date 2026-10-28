@@ -27,6 +27,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   bool _submitting = false;
   bool _confirmationSent = false;
   AuthError? _error;
+  String? _passwordError;
 
   @override
   void dispose() {
@@ -41,7 +42,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   // Tap Create Account → "Required fields filled and details valid?" →
   // submit → "Result?"
   Future<void> _submit() async {
-    setState(() => _error = null);
+    setState(() {
+      _error = null;
+      _passwordError = null;
+    });
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _submitting = true);
@@ -59,7 +63,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       if (user == null && mounted) setState(() => _confirmationSent = true);
     } on AuthException catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.error);
+      if (e.error == AuthError.weakPassword) {
+        setState(() => _passwordError = 'That password is too easy to guess.');
+      } else {
+        setState(() => _error = e.error);
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -88,7 +96,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     ),
     AuthError.network ||
     AuthError.invalidCredentials ||
-    AuthError.emailNotConfirmed => const AuthErrorBanner(
+    AuthError.emailNotConfirmed ||
+    AuthError.weakPassword ||
+    AuthError.invalidCode => const AuthErrorBanner(
       message:
           'We couldn’t create your account right now. '
           'Check your connection and try again.',
@@ -172,10 +182,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _password,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Password',
                     helperText:
                         'At least ${AuthValidation.minPasswordLength} characters',
+                    errorText: _passwordError,
                   ),
                   obscureText: true,
                   autofillHints: const [AutofillHints.newPassword],

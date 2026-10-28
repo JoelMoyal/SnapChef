@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/app_user.dart';
 import '../../../core/widgets/snapchef_logo.dart';
 import '../application/auth_providers.dart';
+import 'password_reset_screen.dart';
 import 'welcome_screen.dart';
 
 /// Open app → "Already logged in?" → main app, or the welcome screen.
@@ -24,10 +25,15 @@ class AuthGate extends ConsumerWidget {
       }
     });
 
+    final recovering = ref.watch(passwordRecoveryProvider);
     return ref
         .watch(authStateProvider)
         .when(
-          data: (user) => user == null ? const WelcomeScreen() : signedIn,
+          data: (user) => user == null
+              ? const WelcomeScreen()
+              : recovering
+              ? const NewPasswordScreen()
+              : signedIn,
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (_, _) => const _RestoreFailed(),

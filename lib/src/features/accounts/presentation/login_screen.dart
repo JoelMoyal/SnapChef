@@ -5,6 +5,7 @@ import '../application/auth_providers.dart';
 import '../application/auth_validation.dart';
 import '../data/auth_repository.dart';
 import 'auth_form.dart';
+import 'password_reset_screen.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -60,7 +61,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     AuthError.network =>
       'Something went wrong on our side or with your connection. '
           'Please try again.',
-    AuthError.emailInUse => 'Something went wrong. Please try again.',
+    AuthError.emailInUse ||
+    AuthError.weakPassword ||
+    AuthError.invalidCode => 'Something went wrong. Please try again.',
   };
 
   @override
@@ -99,7 +102,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () =>
+                Navigator.of(context)
+                    .push(PasswordResetScreen.route(email: _email.text.trim())),
+            child: const Text('Forgot password?'),
+          ),
+        ),
+        const SizedBox(height: 8),
         SubmitButton(label: 'Log in', loading: _submitting, onPressed: _submit),
         const SizedBox(height: 8),
         TextButton(

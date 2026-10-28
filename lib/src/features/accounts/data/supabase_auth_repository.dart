@@ -68,12 +68,48 @@ class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> logOut() => _auth.signOut();
 
+  @override
+  Future<void> sendPasswordResetCode(String email) async {
+    try {
+      await _auth.resetPasswordForEmail(email.trim());
+    } catch (error) {
+      throw _map(error);
+    }
+  }
+
+  @override
+  Future<void> verifyPasswordResetCode({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      await _auth.verifyOTP(
+        email: email.trim(),
+        token: code.trim(),
+        type: supabase.OtpType.recovery,
+      );
+    } catch (error) {
+      throw _map(error);
+    }
+  }
+
+  @override
+  Future<void> updatePassword(String newPassword) async {
+    try {
+      await _auth.updateUser(supabase.UserAttributes(password: newPassword));
+    } catch (error) {
+      throw _map(error);
+    }
+  }
+
   static AuthException _map(Object error) {
     final code = error is supabase.AuthException ? error.code : null;
     return AuthException(switch (code) {
       'invalid_credentials' => AuthError.invalidCredentials,
       'email_not_confirmed' => AuthError.emailNotConfirmed,
       'user_already_exists' || 'email_exists' => AuthError.emailInUse,
+      'weak_password' => AuthError.weakPassword,
+      'otp_expired' => AuthError.invalidCode,
       _ => AuthError.network,
     });
   }

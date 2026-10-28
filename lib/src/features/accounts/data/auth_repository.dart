@@ -14,6 +14,12 @@ enum AuthError {
   /// Sign up: an account with this email already exists.
   emailInUse,
 
+  /// Sign up or new password: the backend rejected the password as too weak.
+  weakPassword,
+
+  /// Password reset: the emailed code is wrong or expired.
+  invalidCode,
+
   /// Either flow: network or server error. The user can retry.
   network,
 }
@@ -51,6 +57,20 @@ abstract interface class AuthRepository {
   });
 
   Future<void> logOut();
+
+  /// Emails a one-time code for resetting the password. Succeeds even when no
+  /// account exists, so it can't be used to discover registered emails.
+  Future<void> sendPasswordResetCode(String email);
+
+  /// Verifies the emailed code, which signs the user in so they can choose a
+  /// new password. Throws [AuthException] with [AuthError.invalidCode].
+  Future<void> verifyPasswordResetCode({
+    required String email,
+    required String code,
+  });
+
+  /// Sets a new password for the signed-in user.
+  Future<void> updatePassword(String newPassword);
 }
 
 /// Temporary in-memory stub so the flow runs end-to-end before the backend is
@@ -107,6 +127,33 @@ class StubAuthRepository implements AuthRepository {
   @override
   Future<void> logOut() async {
     _setCurrent(null);
+  }
+
+  /// The stub accepts this code for any registered email.
+  static const resetCode = '123456';
+
+  @override
+  Future<void> sendPasswordResetCode(String email) => _simulateLatency();
+
+  @override
+  Future<void> verifyPasswordResetCode({
+    required String email,
+    required String code,
+  }) async {
+    await _simulateLatency();
+    final account = _accounts[_normalize(email)];
+    if (account == null || code.trim() != resetCode) {
+      throw const AuthException(AuthError.invalidCode);
+    }
+    _setCurrent(account.user);
+  }
+
+  @override
+  Future<void> updatePassword(String newPassword) async {
+    await _simulateLatency();
+    final user = _current;
+    if (user == null) throw const AuthException(AuthError.network);
+    _accounts[user.email] = (user: user, password: newPassword);
   }
 
   // Skipped at zero latency so tests can call the stub directly inside
