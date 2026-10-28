@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'features/accounts/presentation/accounts_screen.dart';
+import 'features/accounts/presentation/auth_gate.dart';
 import 'features/ingredients/presentation/ingredients_screen.dart';
 import 'features/recipes/presentation/recipes_screen.dart';
 import 'theme.dart';
@@ -15,7 +16,7 @@ class SnapChefApp extends StatelessWidget {
       title: 'SnapChef',
       debugShowCheckedModeBanner: false,
       theme: snapChefTheme,
-      home: const HomeShell(),
+      home: const AuthGate(signedIn: HomeShell()),
     );
   }
 }
