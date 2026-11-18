@@ -27,7 +27,7 @@ String backendError(Object error) {
   if (error is AuthException) return error.message;
   if (error is PostgrestException) {
     if (error.code == '42P01' || error.code == 'PGRST205') {
-      return 'The profile table is not set up yet. Run supabase/setup.sql in your Supabase SQL Editor, then retry.';
+      return 'The profile table is not set up yet. Follow supabase/README.md to apply the database migrations, then retry.';
     }
     return 'Could not load or save your profile. Check the database setup and access policies, then retry.';
   }

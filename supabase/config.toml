@@ -1,0 +1,9 @@
+project_id = "snapchef"
+
+# Both endpoints explicitly authenticate requests in their handlers. This also
+# supports projects using the newer signing keys rather than legacy JWT keys.
+[functions.delete-account]
+verify_jwt = false
+
+[functions.cleanup-recipe-photos]
+verify_jwt = false

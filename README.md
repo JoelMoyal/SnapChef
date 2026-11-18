@@ -2,7 +2,10 @@
 
 Snap a photo of the ingredients you have on hand and get recipe suggestions you can actually make. SnapChef is a cross-platform **Flutter** app (iOS + Android).
 
-> **Status:** early scaffold. The AI/vision layer is currently stubbed — the app runs end-to-end with mock data while the real recognition + recipe engine is wired up.
+> **Status:** account and preference screens use Supabase. The recipe database,
+> private cookbook/bookmarks, recommendation query, and deletion backend are in
+> this repository; apply/deploy them following [supabase/README.md](supabase/README.md).
+> Recipe screens, camera input, and ingredient recognition still need integration.
 
 ---
 
