@@ -29,11 +29,43 @@ Each feature uses three layers:
 The `ingredients` feature is a worked example:
 
 - `data/ingredient_repository.dart` — `IngredientRepository` interface +
-  `StubIngredientRepository`.
-- `application/ingredient_providers.dart` — providers exposing the repo and the
-  detected ingredients.
-- `presentation/ingredients_screen.dart` — a `ConsumerWidget` that watches the
-  provider and renders loading / error / data states.
+  `StubIngredientRepository`; `supabase_ingredient_repository.dart` is the
+  real implementation, and `photo_picker.dart` wraps the camera and photo
+  library behind a `PhotoPicker` interface.
+- `application/ingredient_providers.dart` — providers choosing those
+  implementations; `ingredient_scan_controller.dart` — a `Notifier` holding
+  the editable ingredient list and the state of the current scan.
+- `presentation/ingredients_screen.dart` — a `ConsumerStatefulWidget` that
+  watches the controller and renders each scan state: analyzing, found,
+  nothing found, failed with retry, and permission denied.
+
+## Ingredient recognition
+
+Photos never go straight from the app to the vision model. The app sends a
+resized photo to the `detect-ingredients` Supabase Edge Function
+(`supabase/functions/detect-ingredients/`), which asks Google Gemini for the
+ingredients and returns their names:
+
+- The Gemini API key is an Edge Function secret, never in the app.
+- Only signed-in users can call the function: the platform's JWT check (on by
+  default; don't deploy with `--no-verify-jwt`) rejects other requests.
+- Photos are not stored by the function or by Gemini (`store: false`).
+- `gemini.ts` is the only provider-specific file. Swapping models or
+  providers doesn't touch the app.
+
+Deploying needs access to the team Supabase project and a key from
+[Google AI Studio](https://aistudio.google.com/apikey):
+
+```bash
+supabase secrets set GEMINI_API_KEY=<key> --project-ref wlopsesyhmfcuwxoesja
+supabase functions deploy detect-ingredients --project-ref wlopsesyhmfcuwxoesja --use-api
+```
+
+The model defaults to `gemini-3.5-flash-lite`; set a `GEMINI_MODEL` secret to
+change it. Run the function's tests with
+`deno test supabase/functions/detect-ingredients`. To try the app without the
+function, run `flutter run --dart-define=STUB_DETECTION=true`, which returns
+the same few ingredients for any photo.
 
 ## Rules of thumb
 

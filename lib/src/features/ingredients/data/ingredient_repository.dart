@@ -1,23 +1,65 @@
 import '../../../core/models/ingredient.dart';
+import 'photo_picker.dart';
 
-/// Contract for getting ingredients. The UI depends on this interface, never on
-/// a concrete data source, so we can swap the stub for a real (Firebase +
-/// image-recognition) implementation later without touching the screens.
-abstract interface class IngredientRepository {
-  /// Returns the ingredients detected from a photo.
-  Future<List<Ingredient>> detectFromPhoto();
+/// Why ingredient recognition failed.
+enum IngredientDetectionError {
+  /// No connection: the photo never reached the server.
+  offline,
+
+  /// The server didn't answer in time.
+  timeout,
+
+  /// The recognition service is over its usage limit for now.
+  busy,
+
+  /// The photo is too large or not an image format recognition can read.
+  invalidPhoto,
+
+  /// The session expired, so the server refused the request.
+  signedOut,
+
+  /// Any other server or recognition failure.
+  failed;
+
+  /// Whether sending the same photo again could succeed.
+  bool get isRetryable => switch (this) {
+    offline || timeout || busy || failed => true,
+    invalidPhoto || signedOut => false,
+  };
 }
 
-/// Temporary stub so the app runs end-to-end before real recognition exists.
-/// Replace with a backend-backed implementation in Phase 3.
-class StubIngredientRepository implements IngredientRepository {
+class IngredientDetectionException implements Exception {
+  const IngredientDetectionException(this.error);
+
+  final IngredientDetectionError error;
+
   @override
-  Future<List<Ingredient>> detectFromPhoto() async {
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    return const [
-      Ingredient(id: 'tomato', name: 'Tomato'),
-      Ingredient(id: 'egg', name: 'Egg'),
-      Ingredient(id: 'onion', name: 'Onion'),
+  String toString() => 'IngredientDetectionException($error)';
+}
+
+/// Contract for recognizing ingredients. The UI depends on this interface,
+/// never on a concrete data source, so the recognition service can change
+/// without touching the screens.
+abstract interface class IngredientRepository {
+  /// Returns the ingredients recognized in [photo], possibly none. Throws
+  /// [IngredientDetectionException].
+  Future<List<Ingredient>> detectFromPhoto(Photo photo);
+}
+
+/// Returns the same few ingredients for any photo, so the flow can be tried
+/// without the backend. Run the app with `--dart-define=STUB_DETECTION=true`.
+class StubIngredientRepository implements IngredientRepository {
+  StubIngredientRepository({this.latency = const Duration(milliseconds: 800)});
+
+  final Duration latency;
+
+  @override
+  Future<List<Ingredient>> detectFromPhoto(Photo photo) async {
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
+    return [
+      Ingredient.named('tomato'),
+      Ingredient.named('egg'),
+      Ingredient.named('onion'),
     ];
   }
 }
