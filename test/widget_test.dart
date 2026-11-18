@@ -24,7 +24,7 @@ void main() {
       ),
     );
 
-    // Let the auth state and the stubbed ingredient future resolve.
+    // Let the auth state resolve.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
