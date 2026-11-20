@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'backend.dart';
 import 'recovery.dart';
 
-const snapOrange = Color(0xFFB8430D);
+const snapOrange = Color.fromARGB(255, 241, 118, 61);
 
 class RegistrationPage extends StatefulWidget {
   const RegistrationPage({super.key});
@@ -95,14 +95,14 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      Container(
+                     Container(
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: snapOrange,
-                          borderRadius: BorderRadius.circular(16),
+                          child: Image.asset(
+                            'assets/images/snapchef_icon.png',
+                              width: 60,
+                               height: 60,
+                        fit: BoxFit.contain,
                         ),
-                        child: const Icon(Icons.restaurant_menu_rounded,
-                            color: Colors.white, size: 28),
                       ),
                       const SizedBox(width: 12),
                       const Text('SnapChef',
@@ -192,7 +192,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: ['Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free']
+                      children: ['Vegetarian', 'Vegan', 'Pescatarian', 'Omnivore', 'Gluten-free', 'Dairy-free']
                           .map((preference) => FilterChip(
                                 label: Text(preference),
                                 selected: _preferences.contains(preference),
@@ -498,7 +498,8 @@ class _LoginPageState extends State<LoginPage> {
           key: _form,
           autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const Icon(Icons.restaurant_menu_rounded, size: 60, color: snapOrange),
+            Image.asset('assets/images/snapchef_icon.png', width: 60, height: 60, fit: BoxFit.contain,
+),
             const SizedBox(height: 12),
             const Text('SnapChef', textAlign: TextAlign.center,
               style: TextStyle(fontSize: 32, color: snapOrange,
