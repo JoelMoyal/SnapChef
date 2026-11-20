@@ -1,11 +1,4 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:snapchef/snapchef_auth.dart';
 
@@ -33,5 +26,38 @@ void main() {
     await tester.pump();
     expect(find.text('Passwords do not match.'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+import 'package:snapchef/src/app.dart';
+import 'package:snapchef/src/features/accounts/application/auth_providers.dart';
+import 'package:snapchef/src/features/accounts/data/auth_repository.dart';
+
+void main() {
+  testWidgets('App boots and shows the SnapChef shell when signed in', (
+    tester,
+  ) async {
+    final auth = StubAuthRepository(latency: Duration.zero);
+    await auth.signUp(
+      firstName: 'Ana',
+      lastName: 'Lopez',
+      email: 'ana@example.com',
+      password: 'password123',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authRepositoryProvider.overrideWithValue(auth)],
+        child: const SnapChefApp(),
+      ),
+    );
+
+    // Let the auth state resolve.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // The app bar title and the three navigation tabs should be present.
+    expect(find.textContaining('SnapChef'), findsWidgets);
+    expect(find.text('Ingredients'), findsWidgets);
+    expect(find.text('Recipes'), findsWidgets);
+    expect(find.text('Account'), findsWidgets);
   });
 }
