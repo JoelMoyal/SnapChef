@@ -51,13 +51,40 @@ class RecipeIngredient {
   final String unit;
 
   Map<String, dynamic> toJson() => {
-    'name': name.trim(), 'quantity': quantity, 'unit': unit,
+    'name': name.trim(),
+    'quantity': quantity,
+    'unit': unit,
   };
 }
 
 /// Uses the caller's existing Supabase session. Database policies remain the
 /// authority for access, even if a caller bypasses this repository.
-class RecipeRepository {
+abstract interface class RecipeDataSource {
+  Future<List<Map<String, dynamic>>> options();
+  Future<Map<String, dynamic>> create(RecipeDraft draft);
+  Future<Map<String, dynamic>> update(String id, RecipeDraft draft);
+  Future<Map<String, dynamic>> get(String id);
+  Future<List<Map<String, dynamic>>> mine({int offset = 0});
+  Future<List<Map<String, dynamic>>> community({
+    String? mealType,
+    String? cuisine,
+    int offset = 0,
+  });
+  Future<List<Map<String, dynamic>>> catalog({int offset = 0});
+  Future<List<Map<String, dynamic>>> saved({int offset = 0});
+  Future<bool> isSaved(String id);
+  Future<void> delete(String id);
+  Future<void> save(String id);
+  Future<void> unsave(String id);
+  Future<void> uploadPhoto(
+    String id,
+    Uint8List bytes, {
+    required String contentType,
+  });
+  Future<Uint8List> downloadPhoto(String path);
+}
+
+class RecipeRepository implements RecipeDataSource {
   RecipeRepository(this.client);
 
   final SupabaseClient client;
@@ -69,98 +96,172 @@ class RecipeRepository {
     return id;
   }
 
+  @override
   Future<List<Map<String, dynamic>>> options() async =>
       await client.from('recipe_options').select().order('kind').order('value');
 
-  Future<Map<String, dynamic>> create(RecipeDraft draft) async =>
-      await client.from('recipes').insert({
-        ...draft.toJson(), 'owner_id': _userId,
-      }).select().single();
+  @override
+  Future<Map<String, dynamic>> create(RecipeDraft draft) async => await client
+      .from('recipes')
+      .insert({...draft.toJson(), 'owner_id': _userId})
+      .select()
+      .single();
 
+  @override
   Future<Map<String, dynamic>> update(String id, RecipeDraft draft) async =>
-      await client.from('recipes').update(draft.toJson())
-          .eq('id', id).eq('owner_id', _userId).select().single();
+      await client
+          .from('recipes')
+          .update(draft.toJson())
+          .eq('id', id)
+          .eq('owner_id', _userId)
+          .select()
+          .single();
 
+  @override
   Future<Map<String, dynamic>> get(String id) async =>
       await client.from('recipes').select().eq('id', id).single();
 
+  @override
   Future<List<Map<String, dynamic>>> mine({int offset = 0}) async =>
-      await client.from('recipes').select().eq('owner_id', _userId)
-          .order('created_at', ascending: false).order('id')
+      await client
+          .from('recipes')
+          .select()
+          .eq('owner_id', _userId)
+          .order('created_at', ascending: false)
+          .order('id')
           .range(_offset(offset), _offset(offset) + 29);
 
   /// Community excludes the caller's own recipes and the curated catalog.
+  @override
   Future<List<Map<String, dynamic>>> community({
-    String? mealType, String? cuisine, int offset = 0,
+    String? mealType,
+    String? cuisine,
+    int offset = 0,
   }) async {
-    var query = client.from('recipes').select()
-        .eq('source', 'community').eq('visibility', 'published')
+    var query = client
+        .from('recipes')
+        .select()
+        .eq('source', 'community')
+        .eq('visibility', 'published')
         .or('owner_id.neq.$_userId,owner_id.is.null');
     if (mealType != null) query = query.eq('meal_type', mealType);
     if (cuisine != null) query = query.eq('cuisine', cuisine);
-    return await query.order('published_at', ascending: false).order('id')
+    return await query
+        .order('published_at', ascending: false)
+        .order('id')
         .range(_offset(offset), _offset(offset) + 29);
   }
 
+  @override
   Future<List<Map<String, dynamic>>> catalog({int offset = 0}) async =>
-      await client.from('recipes').select().eq('source', 'catalog')
-          .order('title').order('id')
+      await client
+          .from('recipes')
+          .select()
+          .eq('source', 'catalog')
+          .order('title')
+          .order('id')
           .range(_offset(offset), _offset(offset) + 29);
 
   /// The UI must obtain confirmation before calling this method.
+  @override
   Future<void> delete(String id) async {
-    await client.from('recipes').delete().eq('id', id)
-        .eq('owner_id', _userId).select().single();
+    await client
+        .from('recipes')
+        .delete()
+        .eq('id', id)
+        .eq('owner_id', _userId)
+        .select()
+        .single();
   }
 
+  @override
   Future<void> save(String recipeId) async {
-    await client.from('saved_recipes').upsert({
-      'user_id': _userId, 'recipe_id': recipeId,
-    }, onConflict: 'user_id,recipe_id', ignoreDuplicates: true);
+    await client
+        .from('saved_recipes')
+        .upsert(
+          {'user_id': _userId, 'recipe_id': recipeId},
+          onConflict: 'user_id,recipe_id',
+          ignoreDuplicates: true,
+        );
   }
 
+  @override
   Future<void> unsave(String recipeId) async {
-    await client.from('saved_recipes').delete()
-        .eq('user_id', _userId).eq('recipe_id', recipeId);
+    await client
+        .from('saved_recipes')
+        .delete()
+        .eq('user_id', _userId)
+        .eq('recipe_id', recipeId);
   }
+
+  @override
+  Future<bool> isSaved(String id) async =>
+      (await client
+          .from('saved_recipes')
+          .select('recipe_id')
+          .eq('user_id', _userId)
+          .eq('recipe_id', id)
+          .maybeSingle()) !=
+      null;
 
   /// An unavailable (unpublished) original is omitted by the inner join/RLS.
+  @override
   Future<List<Map<String, dynamic>>> saved({int offset = 0}) async =>
-      await client.from('saved_recipes')
-          .select('saved_at, recipes!inner(*)').eq('user_id', _userId)
-          .order('saved_at', ascending: false).order('recipe_id')
+      await client
+          .from('saved_recipes')
+          .select('saved_at, recipes!inner(*)')
+          .eq('user_id', _userId)
+          .order('saved_at', ascending: false)
+          .order('recipe_id')
           .range(_offset(offset), _offset(offset) + 29);
 
   Future<List<Map<String, dynamic>>> recommend(List<String> ingredients) async {
     _userId;
-    final result = await client.rpc('recommend_recipes', params: {
-      'p_ingredients': ingredients, 'p_limit': 30,
-    });
+    final result = await client.rpc(
+      'recommend_recipes',
+      params: {'p_ingredients': ingredients, 'p_limit': 30},
+    );
     return List<Map<String, dynamic>>.from(result as List);
   }
 
-  Future<void> uploadPhoto(String recipeId, Uint8List bytes, {
+  @override
+  Future<void> uploadPhoto(
+    String recipeId,
+    Uint8List bytes, {
     required String contentType,
   }) async {
     _userId;
     final path = '$recipeId/photo';
-    await client.storage.from(photoBucket).uploadBinary(path, bytes,
-      fileOptions: FileOptions(upsert: true, contentType: contentType));
+    await client.storage
+        .from(photoBucket)
+        .uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(upsert: true, contentType: contentType),
+        );
     // If linking fails, retry; deleting the recipe also queues this fixed path.
-    await client.from('recipes').update({'photo_path': path})
-        .eq('id', recipeId).eq('owner_id', _userId).select().single();
+    await client
+        .from('recipes')
+        .update({'photo_path': path})
+        .eq('id', recipeId)
+        .eq('owner_id', _userId)
+        .select()
+        .single();
   }
 
+  @override
   Future<Uint8List> downloadPhoto(String path) =>
       client.storage.from(photoBucket).download(path);
 
   /// Caller must first show the confirmation and explicit keep/discard choice.
   Future<void> deleteAccount({required bool keepPublished}) async {
     _userId;
-    final response = await client.functions.invoke('delete-account', body: {
-      'confirmation': 'DELETE', 'keepPublished': keepPublished,
-    });
-    if (response.status != 200 || response.data is! Map ||
+    final response = await client.functions.invoke(
+      'delete-account',
+      body: {'confirmation': 'DELETE', 'keepPublished': keepPublished},
+    );
+    if (response.status != 200 ||
+        response.data is! Map ||
         response.data['deleted'] != true) {
       throw StateError('Account deletion failed. Please retry.');
     }

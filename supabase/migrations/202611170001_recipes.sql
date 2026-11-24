@@ -1,26 +1,39 @@
--- Apply to a reviewed Supabase project. Does not replace existing auth tables.
+-- Additive recipe migration. Hetal owns profile/auth setup in supabase/setup.sql.
 begin;
 
-create table if not exists public.snapchef_profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text not null default '',
-  dietary_preferences text[] not null default '{}',
-  meal_types text[] not null default '{}',
-  cuisines text[] not null default '{}',
-  allergens text[] not null default '{}',
-  other_allergens text not null default ''
-);
--- Existing installations may have only the initial profile columns.
-alter table public.snapchef_profiles
-  add column if not exists meal_types text[] not null default '{}',
-  add column if not exists cuisines text[] not null default '{}',
-  add column if not exists allergens text[] not null default '{}',
-  add column if not exists other_allergens text not null default '';
-alter table public.snapchef_profiles enable row level security;
-create policy snapchef_profile_read on public.snapchef_profiles for select to authenticated using (id = (select auth.uid()));
-create policy snapchef_profile_insert on public.snapchef_profiles for insert to authenticated with check (id = (select auth.uid()));
-create policy snapchef_profile_update on public.snapchef_profiles for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
-grant select, insert, update on public.snapchef_profiles to authenticated;
+-- Fail before making changes if the shared auth contract is missing. Never
+-- recreate profiles, add columns, rewrite grants/policies, or replace triggers.
+do $$
+declare expected record;
+begin
+  if to_regclass('public.snapchef_profiles') is null then
+    raise exception 'Missing account setup. Apply the team-approved supabase/setup.sql first.';
+  end if;
+  for expected in select * from (values
+    ('id','uuid'), ('full_name','text'), ('dietary_preferences','_text'),
+    ('meal_types','_text'), ('cuisines','_text'), ('allergens','_text'),
+    ('other_allergens','text'), ('updated_at','timestamptz')
+  ) as required(column_name, udt_name) loop
+    if not exists (select 1 from information_schema.columns c
+      where c.table_schema='public' and c.table_name='snapchef_profiles'
+        and c.column_name=expected.column_name and c.udt_name=expected.udt_name) then
+      raise exception 'Profile contract mismatch: %. Coordinate with the accounts owner.', expected.column_name;
+    end if;
+  end loop;
+  if not (select relrowsecurity from pg_class where oid='public.snapchef_profiles'::regclass) then
+    raise exception 'Profile RLS is disabled. Ask the accounts owner to review permissions.';
+  end if;
+  if not has_table_privilege('authenticated','public.snapchef_profiles','SELECT')
+    or not has_table_privilege('authenticated','public.snapchef_profiles','INSERT')
+    or not has_table_privilege('authenticated','public.snapchef_profiles','UPDATE')
+    or has_table_privilege('anon','public.snapchef_profiles','SELECT')
+    or has_table_privilege('anon','public.snapchef_profiles','INSERT')
+    or has_table_privilege('anon','public.snapchef_profiles','UPDATE')
+    or has_table_privilege('anon','public.snapchef_profiles','DELETE') then
+    raise exception 'Unexpected profile grants. Review with the accounts owner; this migration will not change them.';
+  end if;
+end;
+$$;
 
 create table public.recipe_options (
   kind text not null check (kind in ('meal', 'cuisine', 'allergen', 'unit', 'dietary')),

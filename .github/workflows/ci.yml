@@ -23,6 +23,11 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Pinned to the version the team develops on. Flutter 3.50
+          # deprecates package:flutter/material.dart in favor of material_ui,
+          # which fails `flutter analyze`. Bump this together with that
+          # migration (`dart fix --apply --code=migrate_design_widgets`).
+          flutter-version: 3.47.8
           cache: true
 
       - name: Install dependencies

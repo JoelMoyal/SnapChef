@@ -10,7 +10,7 @@ const b = "22222222-2222-4222-8222-222222222222";
 await db.exec(`
   create role anon; create role authenticated; create role service_role bypassrls;
   create schema auth; create schema storage;
-  create table auth.users(id uuid primary key);
+  create table auth.users(id uuid primary key, raw_user_meta_data jsonb default '{}');
   create function auth.uid() returns uuid language sql stable as
     $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   create table storage.buckets(id text primary key, name text, public boolean,
@@ -21,8 +21,62 @@ await db.exec(`
   grant usage on schema public, auth, storage to anon, authenticated, service_role;
   grant execute on function auth.uid() to authenticated;
   grant all on storage.objects to authenticated;
-  insert into auth.users values ('${a}'), ('${b}');
+  insert into auth.users(id) values ('${a}'), ('${b}');
 `);
+const recipesMigration = await readFile(
+  new URL("../migrations/202611170001_recipes.sql", import.meta.url),
+  "utf8",
+);
+await assert.rejects(() => db.exec(recipesMigration), /Missing account setup/);
+await db.exec("rollback");
+assert.equal(
+  (await db.query("select to_regclass('public.recipes') as name")).rows[0].name,
+  null,
+);
+// Exercise the real accounts owner's setup before recipe migrations, matching
+// the inspected live database. It remains the only owner of account DDL.
+await db.exec(await readFile(new URL("../setup.sql", import.meta.url), "utf8"));
+await db.exec("revoke select on public.snapchef_profiles from authenticated");
+await assert.rejects(
+  () => db.exec(recipesMigration),
+  /Unexpected profile grants/,
+);
+await db.exec("rollback");
+assert.equal(
+  (await db.query("select to_regclass('public.recipes') as name")).rows[0].name,
+  null,
+);
+assert.equal(
+  (await db.query(
+    "select has_table_privilege('authenticated','public.snapchef_profiles','SELECT') as allowed",
+  )).rows[0].allowed,
+  false,
+  "A failed recipe preflight must not change account grants",
+);
+await db.exec("grant select on public.snapchef_profiles to authenticated");
+const sentinelUser = "33333333-3333-4333-8333-333333333333";
+await db.exec(`insert into auth.users(id,raw_user_meta_data)
+  values ('${sentinelUser}', '{"full_name":"Existing member","dietary_preferences":["Vegan"]}')`);
+const profileContract = async () => ({
+  columns: (await db.query(
+    "select column_name, udt_name, column_default, is_nullable from information_schema.columns where table_schema='public' and table_name='snapchef_profiles' order by ordinal_position",
+  )).rows,
+  policies: (await db.query(
+    "select * from pg_policies where schemaname='public' and tablename='snapchef_profiles' order by policyname",
+  )).rows,
+  grants: (await db.query(
+    "select grantee, privilege_type from information_schema.role_table_grants where table_schema='public' and table_name='snapchef_profiles' order by grantee, privilege_type",
+  )).rows,
+  triggers: (await db.query(
+    "select pg_get_triggerdef(t.oid) definition, pg_get_functiondef(t.tgfoid) function from pg_trigger t where not t.tgisinternal and (t.tgrelid='public.snapchef_profiles'::regclass or t.tgrelid='auth.users'::regclass) order by tgname",
+  )).rows,
+  constraints: (await db.query(
+    "select conname, pg_get_constraintdef(oid) definition from pg_constraint where conrelid='public.snapchef_profiles'::regclass order by conname",
+  )).rows,
+  existingRows:
+    (await db.query("select * from public.snapchef_profiles order by id")).rows,
+});
+const beforeRecipes = await profileContract();
 for (
   const name of ["202611170001_recipes.sql", "202611170002_recommendations.sql"]
 ) {
@@ -30,6 +84,11 @@ for (
     await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8"),
   );
 }
+assert.deepEqual(
+  await profileContract(),
+  beforeRecipes,
+  "Recipe migrations must preserve existing profile data, schema, grants, policies, functions and triggers",
+);
 const asUser = async (id) => {
   await db.exec(
     `reset role; set role authenticated; set request.jwt.claim.sub = '${id}';`,
@@ -175,5 +234,5 @@ assert.equal(
 );
 await db.close();
 console.log(
-  "PASS: migrations, recipe validation, two-user RLS, bookmarks, photos, ranking, filters, keep/discard deletion, anonymous denial.",
+  "PASS: profile preservation, fail-closed preflight, migrations, recipe validation, two-user RLS, bookmarks, photos, ranking, filters, keep/discard deletion, anonymous denial.",
 );

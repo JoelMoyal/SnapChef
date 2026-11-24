@@ -5,16 +5,20 @@ or functions have been applied to the hosted project by this branch.
 
 ## Apply and deploy
 
-1. Review the existing `snapchef_profiles` columns, grants and policies in the
-   shared project with its owner. Export/back up existing schema and data first.
-   Existing broad policies are additive to these policies: remove any policy
-   that lets other users read/write private profiles. Do not blindly reset the
-   shared database. Test migrations in a separate development Supabase project.
+1. Review `audit_profiles.sql` against the shared project. The November 23 audit
+   confirmed Hetal's owner-only profile policies and authenticated SELECT/INSERT/
+   UPDATE grants. No live grants or data were changed. Export/back up the existing
+   schema/data and test in development first. Do not reset the shared database.
+   On a fresh development database only, run the accounts owner's reviewed
+   `setup.sql` first. It is the source of truth for profiles and signup triggers;
+   do not rerun it on the shared project merely to install recipe tables.
 2. Apply `migrations/202611170001_recipes.sql`, then
    `migrations/202611170002_recommendations.sql` in SQL Editor, or use the team's
    Supabase CLI migration workflow after reconciling remote migration history.
-   Each migration is transactional and runs once. The first migration creates
-   missing profile storage while retaining the current app's column names.
+   Each migration is transactional and runs once. The first verifies the profile
+   contract and fails before changing anything if setup is incompatible. It never
+   creates/alters the profile table, changes its grants/policies, or replaces any
+   signup/timestamp trigger. The existing three owner policies remain authoritative.
 3. Optionally run `seed.sql` as administrator to add three original catalog recipes.
 4. Deploy `delete-account` and `cleanup-recipe-photos` with the Supabase CLI.
    `config.toml` disables gateway JWT verification because the handlers perform
@@ -61,8 +65,14 @@ later if ingredient analytics or shared ingredient metadata requires it.
 ## Flutter integration
 
 Instantiate `RecipeRepository(backend)` using the existing client from
-`lib/backend.dart`. This branch provides the data layer; recipe editor, cookbook,
-community, and deletion confirmation screens are integration work for the UI.
+`lib/backend.dart`. The feature shell now includes a Riverpod-wired recipe editor,
+My Recipes, community/filter/detail, catalog and bookmarks under
+`lib/src/features/recipes/`. The provider is overridable for widget tests.
+The account-deletion confirmation flow still needs integration with accounts.
+The bootstrap/dependency conflicts have now been repaired and local analysis,
+53 Flutter tests and debug bundle compilation pass (see `docs/BUILD_VERIFICATION.md`).
+Hosted migrations/functions and real device integration remain unverified and
+are still not deployed by these local code changes.
 
 - `create` / `update`: submit a `RecipeDraft`; changing `published` publishes or
   unpublishes the same recipe. Read the returned row for its database-generated ID.
@@ -121,8 +131,11 @@ npm install --prefix tmp/database-check --no-save --package-lock=false @electric
 node supabase/tests/database.test.mjs
 ```
 
-The harness stubs Supabase-owned Auth/Storage tables and roles, then executes the
-real migrations and PostgreSQL row-level policies. It checks two-user isolation,
+The harness stubs Supabase-owned Auth/Storage tables and roles, applies the real
+team `setup.sql`, then executes the recipe migrations and PostgreSQL policies.
+It compares profile data, columns, constraints, grants, policies, triggers and
+trigger functions before/after, and checks a missing setup fails without creating
+recipe tables. It also checks two-user isolation,
 owner-only writes, bookmark visibility, photo isolation, validation, recommendation
 ranking/preferences, anonymous rejection, and both deletion choices. It cannot
 verify Supabase HTTP gateways, Auth internals or real Storage object removal.
